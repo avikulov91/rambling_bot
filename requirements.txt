@@ -1,6 +1,6 @@
-flask
+python-telegram-bot==20.3
 pandas
 openpyxl
-python-telegram-bot==20.3
-httpx==0.24.1
 python-dotenv
+flask
+gunicorn
