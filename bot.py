@@ -7,7 +7,7 @@ import os
 TOKEN = "8442487432:AAFmTCgUAt57UcJhSbMool1IsCi8snOIPEs"
 
 # Пути к файлам
-BASE_DIR = "/Users/ekaterinaigosina/Documents/rambling_assistant_bot"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 COCKTAILS_FILE = os.path.join(BASE_DIR, "tech_cards_coctail_rambling.xlsx")
 ZAGOTOVKI_FILE = os.path.join(BASE_DIR, "tech_cards_zagi.xlsx")
 TINCTURES_FILE = os.path.join(BASE_DIR, "tech_cards_tinctures.xlsx")
