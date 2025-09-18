@@ -230,10 +230,18 @@ def webhook():
 
 
 @app.route("/setwebhook")
-async def set_webhook():
+def set_webhook():
     url = "https://rambling-bot.onrender.com/webhook"
-    await application.bot.set_webhook(url)
-    return f"Webhook установлен: {url}", 200
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # если цикл уже крутится (Render/Gunicorn) — запускаем через create_task
+            loop.create_task(application.bot.set_webhook(url))
+        else:
+            loop.run_until_complete(application.bot.set_webhook(url))
+        return f"Webhook установлен: {url}", 200
+    except Exception as e:
+        return f"Ошибка при установке: {e}", 500
 
 # 🚀 Запуск Flask + фоновая обработка апдейтов
 if __name__ == "__main__":
