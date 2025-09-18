@@ -1,217 +1,161 @@
 import pandas as pd
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
-from aliases import ALIASES  # импортируем словарь алиасов
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+import os
+from aliases import ALIASES
 
-# === НАСТРОЙКИ ===
-TOKEN = "8442487432:AAFmTCgUAt57UcJhSbMool1IsCi8snOIPEs"
-
-# Пути к Excel
+# === Пути к файлам ===
 COCKTAILS_FILE = "tech_cards_coctail_rambling.xlsx"
 ZAGOTOVKI_FILE = "tech_cards_zagi.xlsx"
 TINCTURES_FILE = "tech_cards_tinctures.xlsx"
 
+# === Токен бота ===
+TOKEN = "8442487432:AAFmTCgUAt57UcJhSbMool1IsCi8snOIPEs"
 
-# === ЗАГРУЗКА ДАННЫХ ===
-def load_excel(file_path, mode="cocktails"):
-    df = pd.read_excel(file_path)
+# === Исключения для премиксов ===
+EXCLUDE_FROM_PREMIX = ["сок", "juice", "sparkling", "игрист", "сода", "soda", "сливки", "cream"]
 
-    # Заполняем пустые названия предыдущими
-    if "Название" in df.columns:
-        df["Название"] = df["Название"].fillna(method="ffill")
-
-    # Нормализуем
-    df["Название"] = df["Название"].astype(str).str.strip().str.lower()
-
-    # Убираем полностью пустые строки
-    df = df.dropna(how="all")
-
-    # Разные режимы
-    if mode == "cocktails":
-        df.columns = ["cocktail_name", "glass", "method", "garnish", "ingredient", "amount"]
+# === Загрузка Excel с нормализацией заголовков ===
+def load_excel(file_path, mode="cocktail"):
+    df = pd.read_excel(file_path, sheet_name=0)
+    df.columns = df.columns.str.strip().str.lower()  # нормализуем заголовки
+    df = df.ffill()  # заполняем пустые названия вниз
+    if mode == "cocktail":
+        return df[["название", "посуда", "метод", "гарниш", "состав", "граммовка"]]
     elif mode == "zagi":
-        df.columns = ["name", "ingredient", "amount", "method", "output"]
-    elif mode == "tinctures":
-        df.columns = ["name", "ingredient", "amount", "method"]
-
+        return df[["название", "ингридиенты", "граммовка", "приготовление", "выход"]]
+    elif mode == "tincture":
+        return df[["название", "ингридиенты", "граммовка", "метод"]]
     return df
 
-
-cocktails_df = load_excel(COCKTAILS_FILE, mode="cocktails")
+cocktails_df = load_excel(COCKTAILS_FILE, mode="cocktail")
 zagi_df = load_excel(ZAGOTOVKI_FILE, mode="zagi")
-tinctures_df = load_excel(TINCTURES_FILE, mode="tinctures")
+tinctures_df = load_excel(TINCTURES_FILE, mode="tincture")
 
-print(f"✅ Загружено коктейлей: {cocktails_df['cocktail_name'].nunique()}")
-print(f"✅ Загружено заготовок: {zagi_df['name'].nunique()}")
-print(f"✅ Загружено настоек: {tinctures_df['name'].nunique()}")
+print(f"✅ Загружено коктейлей: {cocktails_df['название'].nunique()}")
+print(f"✅ Загружено заготовок: {zagi_df['название'].nunique()}")
+print(f"✅ Загружено настоек: {tinctures_df['название'].nunique()}")
 
+# === Алиасы ===
+def resolve_alias(name):
+    name = name.strip().lower()
+    return ALIASES.get(name, name)
 
-# === ПОИСК ===
-def find_cocktail(query):
-    q = query.strip().lower()
+# === Форматирование коктейля ===
+def format_cocktail(name):
+    df = cocktails_df[cocktails_df["название"].str.lower() == name]
+    if df.empty:
+        return "❌ Коктейль не найден."
+    row = df.iloc[0]
+    text = f"🍸 *{row['название'].title()}*\n\n"
+    text += f"🥃 Посуда: {row['посуда']}\n"
+    text += f"⚙️ Метод: {row['метод']}\n"
+    text += f"🍊 Гарниш: {row['гарниш']}\n\n"
+    text += "🧾 Ингредиенты:\n"
+    for _, r in df.iterrows():
+        text += f"- {r['состав']} — {r['граммовка']}\n"
+    return text
 
-    # Алиасы
-    if q in ALIASES:
-        q = ALIASES[q]
+# === Премиксы ===
+def format_premix(name, volume):
+    df = cocktails_df[cocktails_df["название"].str.lower() == name]
+    if df.empty:
+        return "❌ Коктейль не найден."
+    text = f"🥤 Премикс для *{df.iloc[0]['название'].title()}* ({volume} мл):\n\n"
+    for _, r in df.iterrows():
+        ingr = str(r["состав"]).lower()
+        if any(bad in ingr for bad in EXCLUDE_FROM_PREMIX):
+            continue
+        try:
+            amount = float(str(r["граммовка"]).split()[0])
+        except:
+            continue
+        scaled = (amount / 100) * volume
+        scaled = int(scaled // 10 * 10)
+        text += f"- {r['состав']} — {scaled} мл\n"
+    return text
 
-    results = cocktails_df[cocktails_df["cocktail_name"] == q]
-    return results if not results.empty else None
+# === Форматирование заготовок ===
+def format_zagot(name):
+    df = zagi_df[zagi_df["название"].str.lower() == name]
+    if df.empty:
+        return "❌ Заготовка не найдена."
+    row = df.iloc[0]
+    text = f"🧪 *{row['название'].title()}*\n\n"
+    text += "🧾 Ингредиенты:\n"
+    for _, r in df.iterrows():
+        text += f"- {r['ингридиенты']} — {r['граммовка']}\n"
+    text += f"\n⚙️ Приготовление: {row['приготовление']}\n"
+    text += f"📦 Выход: {row['выход']}\n"
+    return text
 
+# === Форматирование настоек ===
+def format_tincture(name):
+    df = tinctures_df[tinctures_df["название"].str.lower() == name]
+    if df.empty:
+        return "❌ Настойка не найдена."
+    row = df.iloc[0]
+    text = f"🧪 *{row['название'].title()}*\n\n"
+    text += "🧾 Ингредиенты:\n"
+    for _, r in df.iterrows():
+        text += f"- {r['ингридиенты']} — {r['граммовка']}\n"
+    text += f"\n⚙️ Метод: {row['метод']}\n"
+    return text
 
-def find_zagotovka(query):
-    q = query.strip().lower()
-    results = zagi_df[zagi_df["name"] == q]
-    return results if not results.empty else None
-
-
-def find_tincture(query):
-    q = query.strip().lower()
-    results = tinctures_df[tinctures_df["name"] == q]
-    return results if not results.empty else None
-
-
-# === ХЕНДЛЕРЫ ===
+# === Хендлеры ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🍸 Напиши название коктейля, заготовки или настойки.\n\n"
-        "🧪 Напиши 'заготовки' или 'настойки', чтобы открыть список."
-    )
-
+    await update.message.reply_text("👋 Привет! Введи название коктейля, 'заготовки' или 'настойки'.")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.strip().lower()
+    query = update.message.text.strip().lower()
+    resolved = resolve_alias(query)
 
-    # Запрос списка
-    if text == "заготовки":
-        buttons = [InlineKeyboardButton(name.title(), callback_data=f"zagi|{name}") for name in zagi_df["name"].unique()]
-        keyboard = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
-        await update.message.reply_text("🧪 Заготовки:", reply_markup=InlineKeyboardMarkup(keyboard))
+    if query == "заготовки":
+        buttons = [[InlineKeyboardButton(name.title(), callback_data=f"zagi:{name}")]
+                   for name in zagi_df["название"].unique()]
+        await update.message.reply_text("🧪 Выбери заготовку:", reply_markup=InlineKeyboardMarkup(buttons))
         return
 
-    if text == "настойки":
-        buttons = [InlineKeyboardButton(name.title(), callback_data=f"tinct|{name}") for name in tinctures_df["name"].unique()]
-        keyboard = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
-        await update.message.reply_text("🧪 Настойки:", reply_markup=InlineKeyboardMarkup(keyboard))
+    if query == "настойки":
+        buttons = [[InlineKeyboardButton(name.title(), callback_data=f"tincture:{name}")]
+                   for name in tinctures_df["название"].unique()]
+        await update.message.reply_text("🧪 Выбери настойку:", reply_markup=InlineKeyboardMarkup(buttons))
         return
 
-    # Коктейли
-    cocktail = find_cocktail(text)
-    if cocktail is not None:
-        base = cocktail.iloc[0]
-        ingredients = cocktail[["ingredient", "amount"]].dropna().values.tolist()
-        ing_list = "\n".join([f"• {i} — {a}" for i, a in ingredients])
-        msg = (
-            f"🍸 {base['cocktail_name'].title()}\n"
-            f"🥂 Посуда: {base['glass']}\n"
-            f"⚙️ Метод: {base['method']}\n"
-            f"🍋 Гарниш: {base['garnish']}\n\n"
-            f"Ингредиенты:\n{ing_list}"
-        )
-        # Кнопки премиксов
-        keyboard = [
-            [InlineKeyboardButton("500 мл", callback_data=f"premix|{base['cocktail_name']}|500")],
-            [InlineKeyboardButton("700 мл", callback_data=f"premix|{base['cocktail_name']}|700")],
-            [InlineKeyboardButton("1000 мл", callback_data=f"premix|{base['cocktail_name']}|1000")],
+    if resolved in cocktails_df["название"].str.lower().values:
+        text = format_cocktail(resolved)
+        buttons = [
+            [InlineKeyboardButton("🥤 500 мл", callback_data=f"premix:{resolved}:500"),
+             InlineKeyboardButton("🥤 700 мл", callback_data=f"premix:{resolved}:700"),
+             InlineKeyboardButton("🥤 1000 мл", callback_data=f"premix:{resolved}:1000")]
         ]
-        await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
+        await update.message.reply_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(buttons))
         return
 
-    # Заготовки
-    z = find_zagotovka(text)
-    if z is not None:
-        base = z.iloc[0]
-        ingredients = z[["ingredient", "amount"]].dropna().values.tolist()
-        ing_list = "\n".join([f"• {i} — {a}" for i, a in ingredients])
-        msg = (
-            f"🧪 {base['name'].title()}\n\n"
-            f"Ингредиенты:\n{ing_list}\n\n"
-            f"⚙️ Метод: {base['method']}\n"
-            f"📦 Выход: {base['output']}"
-        )
-        await update.message.reply_text(msg)
-        return
+    await update.message.reply_text("❌ Не понял запрос. Напиши название коктейля, 'заготовки' или 'настойки'.")
 
-    # Настойки
-    t = find_tincture(text)
-    if t is not None:
-        base = t.iloc[0]
-        ingredients = t[["ingredient", "amount"]].dropna().values.tolist()
-        ing_list = "\n".join([f"• {i} — {a}" for i, a in ingredients])
-        msg = (
-            f"🧪 {base['name'].title()}\n\n"
-            f"Ингредиенты:\n{ing_list}\n\n"
-            f"⚙️ Метод: {base['method']}"
-        )
-        await update.message.reply_text(msg)
-        return
-
-    # Если ничего не найдено
-    await update.message.reply_text("❌ Ничего не найдено.")
-
-
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    data = query.data.split("|")
-
+    data = query.data.split(":")
     if data[0] == "premix":
-        name, volume = data[1], int(data[2])
-        cocktail = find_cocktail(name)
-        if cocktail is not None:
-            # Исключаем "соки", "сливки", "соду", "игристое"
-            bad_words = ["juice", "сок", "сливки", "cream", "сода", "sparkling", "игристое"]
-            premix = cocktail[~cocktail["ingredient"].str.lower().str.contains("|".join(bad_words), na=False)]
-            premix = premix[["ingredient", "amount"]].dropna().values.tolist()
-            # Пересчет
-            scaled = []
-            for i, a in premix:
-                try:
-                    val = float(str(a).split()[0])
-                    unit = str(a).split()[1] if len(str(a).split()) > 1 else "ml"
-                    new_val = (val / 100) * volume
-                    new_val = int(new_val // 10 * 10)  # округление вниз до 10
-                    scaled.append(f"• {i} — {new_val} {unit}")
-                except:
-                    scaled.append(f"• {i} — {a}")
-            msg = f"🥃 Премикс для {name.title()} ({volume} мл):\n\n" + "\n".join(scaled)
-            await query.edit_message_text(msg)
+        _, name, vol = data
+        await query.message.reply_text(format_premix(name, int(vol)), parse_mode="Markdown")
     elif data[0] == "zagi":
-        name = data[1]
-        z = find_zagotovka(name)
-        if z is not None:
-            base = z.iloc[0]
-            ingredients = z[["ingredient", "amount"]].dropna().values.tolist()
-            ing_list = "\n".join([f"• {i} — {a}" for i, a in ingredients])
-            msg = (
-                f"🧪 {base['name'].title()}\n\n"
-                f"Ингредиенты:\n{ing_list}\n\n"
-                f"⚙️ Метод: {base['method']}\n"
-                f"📦 Выход: {base['output']}"
-            )
-            await query.edit_message_text(msg)
-    elif data[0] == "tinct":
-        name = data[1]
-        t = find_tincture(name)
-        if t is not None:
-            base = t.iloc[0]
-            ingredients = t[["ingredient", "amount"]].dropna().values.tolist()
-            ing_list = "\n".join([f"• {i} — {a}" for i, a in ingredients])
-            msg = (
-                f"🧪 {base['name'].title()}\n\n"
-                f"Ингредиенты:\n{ing_list}\n\n"
-                f"⚙️ Метод: {base['method']}"
-            )
-            await query.edit_message_text(msg)
-
+        _, name = data
+        await query.message.reply_text(format_zagot(name), parse_mode="Markdown")
+    elif data[0] == "tincture":
+        _, name = data
+        await query.message.reply_text(format_tincture(name), parse_mode="Markdown")
 
 # === MAIN ===
 def main():
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(CallbackQueryHandler(handle_callback))
+    print("🤖 Бот запущен. Нажми Ctrl+C для остановки.")
     app.run_polling()
-
 
 if __name__ == "__main__":
     main()
