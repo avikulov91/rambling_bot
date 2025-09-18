@@ -224,6 +224,31 @@ def set_webhook():
 
     return f"Webhook установлен: {url}", 200
 
+@app.route("/setwebhook")
+def set_webhook():
+    url = f"https://rambling-bot.onrender.com/webhook"
+
+    async def _set():
+        await application.bot.set_webhook(url)
+
+    import asyncio
+    asyncio.run(_set())
+
+    return f"Webhook установлен: {url}", 200
+
+
+# 🚀 Запуск Flask + фоновая обработка апдейтов
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))  # Render сам подставит порт
+    import asyncio
+
+    async def run():
+        await application.initialize()
+        await application.start()
+        await application.updater.start_polling()  # обработка очереди
+
+    # Запускаем фоновую задачу
+    asyncio.get_event_loop().create_task(run())
+
+    # Запуск Flask
+    port = int(os.environ.get("PORT", 5000))  # Render подставит порт
     app.run(host="0.0.0.0", port=port)
