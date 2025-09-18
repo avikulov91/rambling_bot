@@ -200,12 +200,28 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text(format_tincture(name), parse_mode="Markdown")
 
 # ---------- Flask + webhook ----------
+# ---------- Flask + webhook ----------
 app = Flask(__name__)
+
+# Создаём Telegram Application
 application = Application.builder().token(TOKEN).build()
+
+# Регистрируем хендлеры
 application.add_handler(CommandHandler("start", start))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 application.add_handler(CallbackQueryHandler(handle_callback))
 
+# --- Фоновая задача для обработки апдейтов ---
+async def run():
+    await application.initialize()
+    await application.start()
+    # Обработка очереди апдейтов (важно!)
+    await application.updater.start_polling()
+
+# Запускаем задачу в фоне при старте Flask
+asyncio.get_event_loop().create_task(run())
+
+# --- Webhook ---
 @app.route("/webhook", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), application.bot)
@@ -220,9 +236,7 @@ def set_webhook():
     async def _set():
         await application.bot.set_webhook(url)
 
-    import asyncio
     asyncio.run(_set())
-
     return f"Webhook установлен: {url}", 200
 
 # 🚀 Запуск Flask + фоновая обработка апдейтов
