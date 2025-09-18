@@ -1,4 +1,4 @@
 pandas
 openpyxl
-python-telegram-bot==20.3
+python-telegram-bot==0.24.0
 python-dotenv
