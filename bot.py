@@ -212,10 +212,16 @@ def webhook():
     application.update_queue.put_nowait(update)
     return "ok", 200
 
-@app.route("/setwebhook", methods=["GET", "POST"])
+@app.route("/setwebhook")
 def set_webhook():
-    url = "https://rambling-bot.onrender.com/webhook"
-    application.bot.set_webhook(url)
+    url = f"https://rambling-bot.onrender.com/webhook"
+
+    async def _set():
+        await application.bot.set_webhook(url)
+
+    import asyncio
+    asyncio.run(_set())
+
     return f"Webhook установлен: {url}", 200
 
 if __name__ == "__main__":
