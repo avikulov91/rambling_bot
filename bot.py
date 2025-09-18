@@ -1,10 +1,7 @@
 # bot.py
 import os
 import re
-import math
 import pandas as pd
-from typing import List, Tuple, Optional
-
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -30,7 +27,6 @@ try:
 except Exception:
     ALIASES = {}
 
-
 # ---------- Утилиты ----------
 def normalize_text(s: str) -> str:
     s = (s or "").strip().lower()
@@ -39,12 +35,10 @@ def normalize_text(s: str) -> str:
     s = re.sub(r"\s+", " ", s)
     return s
 
-
 def resolve_alias(user_text: str) -> str:
     t = normalize_text(user_text)
     mapped = ALIASES.get(t, t)
     return normalize_text(mapped).replace("_", " ").strip()
-
 
 # ---------- Загрузка Excel ----------
 COL_SYNONYMS = {
@@ -61,7 +55,6 @@ COL_SYNONYMS = {
     "выход": "выход",
 }
 
-
 def canon_columns(df: pd.DataFrame) -> pd.DataFrame:
     ren = {}
     for c in df.columns:
@@ -69,12 +62,10 @@ def canon_columns(df: pd.DataFrame) -> pd.DataFrame:
         ren[c] = COL_SYNONYMS.get(key, key)
     return df.rename(columns=ren)
 
-
 def load_table(path: str, kind: str) -> pd.DataFrame:
     df = pd.read_excel(path)
     df = canon_columns(df).ffill()
 
-    # если нет "название", создаём её из первой колонки
     if "название" not in df.columns:
         df.insert(0, "название", df.iloc[:, 0].astype(str))
 
@@ -82,21 +73,18 @@ def load_table(path: str, kind: str) -> pd.DataFrame:
     print(f"✅ Загружено {kind}: {df['название'].nunique()} уникальных имён")
     return df
 
-
 # ---------- Загрузка данных ----------
 cocktails_df = load_table(COCKTAILS_FILE, "коктейлей")
 zagi_df      = load_table(ZAGOTOVKI_FILE, "заготовок")
-tinct_df     = load_table(TINCTURES_FILE, "настоек")
+tinct_df     = load_table(TINCTURES_FILE, "настoек")
 
-print(f"✅ Загружено коктейлей: {cocktails_df['название'].nunique()}")
-print(f"✅ Загружено заготовок: {zagi_df['название'].nunique() if 'название' in zagi_df.columns else 0}")
-print(f"✅ Загружено настоек: {tinct_df['название'].nunique()}")
+print(f"✅ Коктейли: {cocktails_df['название'].nunique()}")
+print(f"✅ Заготовки: {zagi_df['название'].nunique()}")
+print(f"✅ Настойки: {tinct_df['название'].nunique()}")
 
-# 👇 Дополнительно выводим список колонок
-print("📌 Колонки в таблице коктейлей:", cocktails_df.columns.tolist())
-print("📌 Колонки в таблице заготовок:", zagi_df.columns.tolist())
-print("📌 Колонки в таблице настоек:", tinct_df.columns.tolist())
-
+print("📌 Колонки коктейлей:", cocktails_df.columns.tolist())
+print("📌 Колонки заготовок:", zagi_df.columns.tolist())
+print("📌 Колонки настоек:", tinct_df.columns.tolist())
 
 # ---------- Форматтеры ----------
 def format_cocktail(name: str) -> str:
@@ -112,7 +100,6 @@ def format_cocktail(name: str) -> str:
             text += f"— {r['состав']} — {r['граммовка']}\n"
     return text
 
-
 def format_zagotovka(name: str) -> str:
     g = zagi_df[zagi_df["название"] == name]
     if g.empty:
@@ -125,7 +112,6 @@ def format_zagotovka(name: str) -> str:
     if "выход" in g: text += f"\n📦 Выход: {g['выход'].iloc[0]}"
     return text
 
-
 def format_tincture(name: str) -> str:
     g = tinct_df[tinct_df["название"] == name]
     if g.empty:
@@ -137,7 +123,6 @@ def format_tincture(name: str) -> str:
     if "метод" in g: text += f"\n🛠 Метод: {g['метод'].iloc[0]}"
     return text
 
-
 # ---------- Хендлеры ----------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -147,34 +132,32 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     await update.message.reply_text("👋 Привет! Выбери категорию:", reply_markup=InlineKeyboardMarkup(keyboard))
 
-
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = resolve_alias(update.message.text)
 
-    if query in cocktail_names:
+    if query in cocktails_df["название"].values:
         await update.message.reply_text(format_cocktail(query), parse_mode="Markdown")
-    elif query in zagi_names:
+    elif query in zagi_df["название"].values:
         await update.message.reply_text(format_zagotovka(query), parse_mode="Markdown")
-    elif query in tinct_names:
+    elif query in tinct_df["название"].values:
         await update.message.reply_text(format_tincture(query), parse_mode="Markdown")
     else:
         await update.message.reply_text("❌ Не нашёл. Попробуй другое название.")
-
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     if query.data == "list_cocktails":
-        names = sorted(cocktail_names)
+        names = sorted(cocktails_df["название"].unique())
         kb = [[InlineKeyboardButton(n.title(), callback_data=f"cocktail_{n}")] for n in names[:20]]
         await query.message.reply_text("🍸 Выбери коктейль:", reply_markup=InlineKeyboardMarkup(kb))
     elif query.data == "list_zagi":
-        names = sorted(zagi_names)
+        names = sorted(zagi_df["название"].unique())
         kb = [[InlineKeyboardButton(n.title(), callback_data=f"zagi_{n}")] for n in names[:20]]
         await query.message.reply_text("🧪 Выбери заготовку:", reply_markup=InlineKeyboardMarkup(kb))
     elif query.data == "list_tinct":
-        names = sorted(tinct_names)
+        names = sorted(tinct_df["название"].unique())
         kb = [[InlineKeyboardButton(n.title(), callback_data=f"tinct_{n}")] for n in names[:20]]
         await query.message.reply_text("🧪 Выбери настойку:", reply_markup=InlineKeyboardMarkup(kb))
     elif query.data.startswith("cocktail_"):
@@ -187,7 +170,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         name = query.data.replace("tinct_", "")
         await query.message.reply_text(format_tincture(name), parse_mode="Markdown")
 
-
 # ---------- Запуск ----------
 def main():
     app = Application.builder().token(TOKEN).build()
@@ -196,7 +178,6 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_callback))
     print("🤖 Бот запущен. Нажми Ctrl+C для остановки.")
     app.run_polling()
-
 
 if __name__ == "__main__":
     main()
