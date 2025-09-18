@@ -212,17 +212,6 @@ def webhook():
     application.update_queue.put_nowait(update)
     return "OK", 200
 
-@app.route("/setwebhook")
-def set_webhook():
-    url = f"https://rambling-bot.onrender.com/webhook"
-
-    async def _set():
-        await application.bot.set_webhook(url)
-
-    import asyncio
-    asyncio.run(_set())
-
-    return f"Webhook установлен: {url}", 200
 
 @app.route("/setwebhook")
 def set_webhook():
@@ -235,7 +224,6 @@ def set_webhook():
     asyncio.run(_set())
 
     return f"Webhook установлен: {url}", 200
-
 
 # 🚀 Запуск Flask + фоновая обработка апдейтов
 if __name__ == "__main__":
