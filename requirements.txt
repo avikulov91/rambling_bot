@@ -1,16 +1,7 @@
-# requirements.txt
-
-# Основные библиотеки
 flask
 gunicorn
-
-# Работа с Excel
 pandas
 openpyxl
-
-# Telegram Bot API
 python-telegram-bot==20.3
 httpx==0.24.1
-
-# Переменные окружения (если используешь .env)
 python-dotenv
