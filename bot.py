@@ -214,7 +214,7 @@ def webhook():
 
 @app.route("/setwebhook", methods=["GET", "POST"])
 def set_webhook():
-    url = f"https://YOUR-APP-NAME.onrender.com/webhook"
+    url = "https://rambling-bot.onrender.com/webhook"
     application.bot.set_webhook(url)
     return f"Webhook установлен: {url}", 200
 
