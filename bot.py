@@ -225,7 +225,7 @@ asyncio.get_event_loop().create_task(run())
 @app.route("/webhook", methods=["POST"])
 def webhook():
     update = Update.de_json(request.get_json(force=True), application.bot)
-    application.update_queue.put_nowait(update)
+    asyncio.run(application.process_update(update))
     return "OK", 200
 
 
