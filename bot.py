@@ -210,7 +210,7 @@ application.add_handler(CallbackQueryHandler(handle_callback))
 def webhook():
     update = Update.de_json(request.get_json(force=True), application.bot)
     application.update_queue.put_nowait(update)
-    return "ok", 200
+    return "OK", 200
 
 @app.route("/setwebhook")
 def set_webhook():
