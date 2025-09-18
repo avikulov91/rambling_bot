@@ -85,12 +85,17 @@ def load_table(path: str, kind: str) -> pd.DataFrame:
 
 # ---------- Загрузка данных ----------
 cocktails_df = load_table(COCKTAILS_FILE, "коктейлей")
-zagi_df = load_table(ZAGOTOVKI_FILE, "заготовок")
-tinct_df = load_table(TINCTURES_FILE, "настоек")
+zagi_df      = load_table(ZAGOTOVKI_FILE, "заготовок")
+tinct_df     = load_table(TINCTURES_FILE, "настоек")
 
-cocktail_names = set(cocktails_df["название"].unique())
-zagi_names = set(zagi_df["название"].unique())
-tinct_names = set(tinct_df["название"].unique())
+print(f"✅ Загружено коктейлей: {cocktails_df['название'].nunique()}")
+print(f"✅ Загружено заготовок: {zagi_df['название'].nunique()}")
+print(f"✅ Загружено настоек: {tinct_df['название'].nunique()}")
+
+# 👇 Дополнительно выводим список колонок
+print("📌 Колонки в таблице коктейлей:", cocktails_df.columns.tolist())
+print("📌 Колонки в таблице заготовок:", zagi_df.columns.tolist())
+print("📌 Колонки в таблице настоек:", tinct_df.columns.tolist())
 
 
 # ---------- Форматтеры ----------
