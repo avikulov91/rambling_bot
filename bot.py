@@ -225,14 +225,5 @@ def set_webhook():
     return f"Webhook установлен: {url}", 200
 
 if __name__ == "__main__":
-    import sys
-
-    # Порт по умолчанию
-    port = 8080
-
-    # Если передан аргумент --port=XXXX → берём его
-    for arg in sys.argv[1:]:
-        if arg.startswith("--port="):
-            port = int(arg.split("=", 1)[1])
-
+    port = int(os.environ.get("PORT", 5000))  # Render сам подставит порт
     app.run(host="0.0.0.0", port=port)
