@@ -212,7 +212,7 @@ def webhook():
     application.update_queue.put_nowait(update)
     return "ok", 200
 
-@app.route("/setwebhook")
+@app.route("/setwebhook", methods=["GET", "POST"])
 def set_webhook():
     url = f"https://YOUR-APP-NAME.onrender.com/webhook"
     application.bot.set_webhook(url)
