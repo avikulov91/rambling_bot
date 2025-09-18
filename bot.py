@@ -1,7 +1,9 @@
 # bot.py
 import os
 import re
+import math
 import pandas as pd
+from typing import List, Tuple, Optional
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -27,6 +29,7 @@ try:
 except Exception:
     ALIASES = {}
 
+
 # ---------- Утилиты ----------
 def normalize_text(s: str) -> str:
     s = (s or "").strip().lower()
@@ -39,6 +42,7 @@ def resolve_alias(user_text: str) -> str:
     t = normalize_text(user_text)
     mapped = ALIASES.get(t, t)
     return normalize_text(mapped).replace("_", " ").strip()
+
 
 # ---------- Загрузка Excel ----------
 COL_SYNONYMS = {
@@ -73,18 +77,20 @@ def load_table(path: str, kind: str) -> pd.DataFrame:
     print(f"✅ Загружено {kind}: {df['название'].nunique()} уникальных имён")
     return df
 
+
 # ---------- Загрузка данных ----------
 cocktails_df = load_table(COCKTAILS_FILE, "коктейлей")
 zagi_df      = load_table(ZAGOTOVKI_FILE, "заготовок")
-tinct_df     = load_table(TINCTURES_FILE, "настoек")
+tinct_df     = load_table(TINCTURES_FILE, "настойки")
 
-print(f"✅ Коктейли: {cocktails_df['название'].nunique()}")
-print(f"✅ Заготовки: {zagi_df['название'].nunique()}")
-print(f"✅ Настойки: {tinct_df['название'].nunique()}")
+cocktail_names = set(cocktails_df["название"])
+zagi_names     = set(zagi_df["название"])
+tinct_names    = set(tinct_df["название"])
 
-print("📌 Колонки коктейлей:", cocktails_df.columns.tolist())
-print("📌 Колонки заготовок:", zagi_df.columns.tolist())
-print("📌 Колонки настоек:", tinct_df.columns.tolist())
+print(f"✅ Загружено коктейлей: {len(cocktail_names)}")
+print(f"✅ Загружено заготовок: {len(zagi_names)}")
+print(f"✅ Загружено настоек: {len(tinct_names)}")
+
 
 # ---------- Форматтеры ----------
 def format_cocktail(name: str) -> str:
@@ -95,9 +101,12 @@ def format_cocktail(name: str) -> str:
     if "посуда" in g: text += f"🥃 Посуда: {g['посуда'].iloc[0]}\n"
     if "метод" in g: text += f"🛠 Метод: {g['метод'].iloc[0]}\n"
     if "гарниш" in g: text += f"🌿 Гарниш: {g['гарниш'].iloc[0]}\n\n"
+
+    # фикс: теперь показываются все ингредиенты
     if "состав" in g and "граммовка" in g:
         for _, r in g.iterrows():
-            text += f"— {r['состав']} — {r['граммовка']}\n"
+            if r["состав"] and r["граммовка"]:
+                text += f"— {r['состав']} — {r['граммовка']}\n"
     return text
 
 def format_zagotovka(name: str) -> str:
@@ -107,7 +116,8 @@ def format_zagotovka(name: str) -> str:
     text = f"🧪 *{name.title()}*\n\n"
     if "ингредиенты" in g and "граммовка" in g:
         for _, r in g.iterrows():
-            text += f"— {r['ингредиенты']} — {r['граммовка']}\n"
+            if r["ингредиенты"] and r["граммовка"]:
+                text += f"— {r['ингредиенты']} — {r['граммовка']}\n"
     if "приготовление" in g: text += f"\n🛠 Метод: {g['приготовление'].iloc[0]}"
     if "выход" in g: text += f"\n📦 Выход: {g['выход'].iloc[0]}"
     return text
@@ -119,9 +129,11 @@ def format_tincture(name: str) -> str:
     text = f"🧪 *{name.title()}*\n\n"
     if "ингредиенты" in g and "граммовка" in g:
         for _, r in g.iterrows():
-            text += f"— {r['ингредиенты']} — {r['граммовка']}\n"
+            if r["ингредиенты"] and r["граммовка"]:
+                text += f"— {r['ингредиенты']} — {r['граммовка']}\n"
     if "метод" in g: text += f"\n🛠 Метод: {g['метод'].iloc[0]}"
     return text
+
 
 # ---------- Хендлеры ----------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -135,11 +147,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = resolve_alias(update.message.text)
 
-    if query in cocktails_df["название"].values:
+    if query in cocktail_names:
         await update.message.reply_text(format_cocktail(query), parse_mode="Markdown")
-    elif query in zagi_df["название"].values:
+    elif query in zagi_names:
         await update.message.reply_text(format_zagotovka(query), parse_mode="Markdown")
-    elif query in tinct_df["название"].values:
+    elif query in tinct_names:
         await update.message.reply_text(format_tincture(query), parse_mode="Markdown")
     else:
         await update.message.reply_text("❌ Не нашёл. Попробуй другое название.")
@@ -149,16 +161,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     if query.data == "list_cocktails":
-        names = sorted(cocktails_df["название"].unique())
-        kb = [[InlineKeyboardButton(n.title(), callback_data=f"cocktail_{n}")] for n in names[:20]]
+        kb = [[InlineKeyboardButton(n.title(), callback_data=f"cocktail_{n}")] for n in sorted(cocktail_names)[:20]]
         await query.message.reply_text("🍸 Выбери коктейль:", reply_markup=InlineKeyboardMarkup(kb))
     elif query.data == "list_zagi":
-        names = sorted(zagi_df["название"].unique())
-        kb = [[InlineKeyboardButton(n.title(), callback_data=f"zagi_{n}")] for n in names[:20]]
+        kb = [[InlineKeyboardButton(n.title(), callback_data=f"zagi_{n}")] for n in sorted(zagi_names)[:20]]
         await query.message.reply_text("🧪 Выбери заготовку:", reply_markup=InlineKeyboardMarkup(kb))
     elif query.data == "list_tinct":
-        names = sorted(tinct_df["название"].unique())
-        kb = [[InlineKeyboardButton(n.title(), callback_data=f"tinct_{n}")] for n in names[:20]]
+        kb = [[InlineKeyboardButton(n.title(), callback_data=f"tinct_{n}")] for n in sorted(tinct_names)[:20]]
         await query.message.reply_text("🧪 Выбери настойку:", reply_markup=InlineKeyboardMarkup(kb))
     elif query.data.startswith("cocktail_"):
         name = query.data.replace("cocktail_", "")
@@ -169,6 +178,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data.startswith("tinct_"):
         name = query.data.replace("tinct_", "")
         await query.message.reply_text(format_tincture(name), parse_mode="Markdown")
+
 
 # ---------- Запуск ----------
 def main():
