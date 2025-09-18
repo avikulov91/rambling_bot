@@ -43,7 +43,13 @@ zagi_df = load_excel(ZAGOTOVKI_FILE, "zagi")
 tinctures_df = load_excel(TINCTURES_FILE, "tinctures")
 
 print(f"✅ Загружено коктейлей: {cocktails_df['Название'].nunique()}")
-print(f"✅ Загружено заготовок: {zagi_df['Название'].nunique()}")
+
+print("📌 Колонки в таблице заготовок:", zagi_df.columns.tolist())
+if "Название" in zagi_df.columns:
+    print(f"✅ Загружено заготовок: {zagi_df['Название'].nunique()}")
+else:
+    print("⚠️ В таблице заготовок нет колонки 'Название'!")
+
 print(f"✅ Загружено настоек: {tinctures_df['Название'].nunique()}")
 
 
