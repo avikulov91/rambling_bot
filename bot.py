@@ -2,8 +2,10 @@
 import os
 import re
 import math
+import asyncio   # 👈 важно для работы process_update
 import pandas as pd
-from flask import Flask, request
+
+from flask import Flask, request, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
