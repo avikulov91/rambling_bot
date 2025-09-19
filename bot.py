@@ -207,6 +207,9 @@ app = Flask(__name__)
 
 # Создаём Telegram Application
 application = Application.builder().token(TOKEN).build()
+import asyncio
+asyncio.get_event_loop().run_until_complete(application.initialize())
+asyncio.get_event_loop().run_until_complete(application.start())
 
 # Регистрируем хендлеры
 application.add_handler(CommandHandler("start", start))
